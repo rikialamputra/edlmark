@@ -38,6 +38,11 @@
   .btn-primary{width:100%;padding:11px 14px;border-radius:9px;border:1px solid var(--ink);
                background:var(--ink);color:#fff;font-weight:600;font-size:14px}
   .btn-primary:disabled{opacity:.55;cursor:default}
+  .login-divider{display:flex;align-items:center;gap:12px;margin:17px 0;color:var(--muted);font-size:12px}
+  .login-divider:before,.login-divider:after{content:"";height:1px;flex:1;background:var(--line)}
+  .btn-google{position:relative;width:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;color:#3c4043;font-weight:600;font-size:13px;cursor:not-allowed;opacity:.7}
+  .btn-google .google-mark{font-size:18px;font-weight:700;color:#4285f4}
+  .btn-google small{position:absolute;right:9px;color:var(--muted);font-size:9px;font-weight:400}
   .err{margin:0 0 14px;padding:9px 11px;border:1px solid #d8d8d4;border-radius:8px;
        background:var(--soft);font-size:13px;color:var(--ink)}
   .hint{margin:16px 0 0;color:var(--muted);font-size:11.5px;line-height:1.5}
@@ -197,7 +202,7 @@
   <div id="checking" class="checking" hidden>Memeriksa sesi…</div>
   <form class="login-card" id="loginForm" autocomplete="on">
     <h1>EdlinkMark</h1>
-    <p class="sub">Masuk dengan NIM dan kata sandi EdLink.</p>
+    <p class="sub">Masuk dengan akun EdLink kamu.</p>
     <div id="loginErr"></div>
     <div class="field">
       <label for="nim">NIM / Email</label>
@@ -213,6 +218,8 @@
     </label>
     <button class="btn-primary" id="loginBtn" type="submit">Masuk</button>
    
+    <div class="login-divider" aria-hidden="true"><span>atau</span></div>
+    <button class="btn-google" id="googleLoginBtn" type="button" disabled title="Login Google belum didukung oleh API EdLink"> <span class="google-mark" aria-hidden="true">G</span> Masuk dengan Google <small>Belum tersedia</small></button>
   </form>
 </section>
 
@@ -1139,7 +1146,7 @@
       $('pass').value = '';
     }catch(e){
       var msg = e && e.message ? e.message : 'Gagal masuk.';
-      if(e && e.network) msg = 'Tidak bisa terhubung ke server. Pastikan halaman dibuka lewat http://localhost, bukan file://.';
+      if(e && e.network) msg = 'Tidak bisa terhubung ke API EdLink. Periksa koneksi atau konfigurasi proxy hosting.';
       $('loginErr').innerHTML = '<p class="err">' + esc(msg) + '</p>';
     }
     btn.disabled = false; btn.textContent = 'Masuk';
