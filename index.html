@@ -71,6 +71,11 @@
           border-radius:8px;padding:7px 12px}
   #quizList .quiz a:hover{background:var(--ink);color:#fff}
   .none{color:var(--muted);font-size:13px;margin:0}
+  .day-filter{display:flex;align-items:center;gap:10px;margin:0 0 12px}
+  .day-filter label{margin:0;font-size:12.5px;font-weight:600}
+  .day-filter select{max-width:230px;padding:8px 10px;border:1px solid var(--line);
+                     border-radius:8px;background:var(--card);color:var(--ink);font:inherit;font-size:13px}
+  .day-filter .day-count{font-size:11.5px;color:var(--muted)}
   .tabs{display:flex;gap:6px;margin:0 0 16px;border-bottom:1px solid var(--line)}
   .tab{border:0;background:none;padding:9px 2px;margin-right:16px;color:var(--muted);font-size:13.5px;
        border-bottom:2px solid transparent;margin-bottom:-1px}
@@ -296,7 +301,7 @@
   var token = localStorage.getItem(KEY) || '';
   var state = { posts:[], groups:[], quizzes:[], user:null, groupSel:null, postTotals:{},
                 likeTab:'unliked', railScroll:0, openPost:null, markScope:'',
-                marks:{ commented:{}, downloaded:{} } };
+                selectedDay:'all', marks:{ commented:{}, downloaded:{} } };
 
   // Status like berasal dari API EdLink (field `like` pada postingan).
   function isLiked(p){ return !!(p && p.like); }
@@ -365,6 +370,70 @@
   function isMobile(){ return mqMobile.matches; }
 
   /* ---------------- helpers ---------------- */
+
+  var WEEKDAYS = [
+    { id:'mon', label:'Senin', aliases:['senin','monday','mon'] },
+    { id:'tue', label:'Selasa', aliases:['selasa','tuesday','tue'] },
+    { id:'wed', label:'Rabu', aliases:['rabu','wednesday','wed'] },
+    { id:'thu', label:'Kamis', aliases:['kamis','thursday','thu'] },
+    { id:'fri', label:'Jumat', aliases:['jumat','jumat','friday','fri'] },
+    { id:'sat', label:'Sabtu', aliases:['sabtu','saturday','sat'] },
+    { id:'sun', label:'Minggu', aliases:['minggu','ahad','sunday','sun'] }
+  ];
+  function normalizeDayText(value){
+    var text = String(value || '').toLowerCase().replace(/[’']/g,'').replace(/[^a-z]/g,'');
+    for(var i=0;i<WEEKDAYS.length;i++){
+      for(var j=0;j<WEEKDAYS[i].aliases.length;j++){
+        if(text === WEEKDAYS[i].aliases[j]) return WEEKDAYS[i].id;
+      }
+    }
+    return '';
+  }
+  function daysInText(value){
+    var text = String(value || '').toLowerCase().replace(/[’']/g,'');
+    var found = [];
+    WEEKDAYS.forEach(function(day){
+      day.aliases.forEach(function(alias){
+        var re = new RegExp('(^|[^a-z])' + alias + '([^a-z]|$)','i');
+        if(re.test(text) && found.indexOf(day.id) < 0) found.push(day.id);
+      });
+    });
+    return found;
+  }
+  // Jadwal pada respons kelas dapat berada di beberapa level (jadwal mingguan,
+  // schedule, meeting, atau field hari). Ambil hanya nama hari dari konteks jadwal.
+  function extractGroupDays(group){
+    var found = [];
+    function walk(value,key,depth,inSchedule){
+      if(value == null || depth > 6) return;
+      var k = String(key || '');
+      var scheduleContext = inSchedule || /(jadwal|schedule|weekly|meeting|pertemuan|timeslot)/i.test(k);
+      var dayField = /(hari|day|weekday)/i.test(k);
+      if(typeof value === 'string'){
+        if(dayField || scheduleContext){
+          daysInText(value).forEach(function(id){
+            if(found.indexOf(id) < 0) found.push(id);
+          });
+        }
+        return;
+      }
+      if(typeof value === 'number' || typeof value === 'boolean') return;
+      if(Array.isArray(value)){
+        value.forEach(function(item){ walk(item,k,depth+1,scheduleContext); });
+        return;
+      }
+      if(typeof value === 'object'){
+        Object.keys(value).forEach(function(childKey){
+          walk(value[childKey],childKey,depth+1,scheduleContext);
+        });
+      }
+    }
+    walk(group,'',0,false);
+    return found.sort(function(a,b){
+      return WEEKDAYS.findIndex(function(d){return d.id===a;}) -
+             WEEKDAYS.findIndex(function(d){return d.id===b;});
+    });
+  }
 
   function fmtDate(ms){
     if(!ms) return '';
@@ -1013,12 +1082,16 @@
     // Semua kelas ikut ditampilkan, termasuk yang belum punya postingan.
     var byGroup = new Map();
     state.groups.forEach(function(g){
-      byGroup.set(g.id, { name:g.name, total:state.postTotals[g.id] || 0, items:[] });
+      byGroup.set(g.id, {
+        name:g.name, total:state.postTotals[g.id] || 0, items:[],
+        days:extractGroupDays(g)
+      });
     });
     rows.forEach(function(p){
       if(!byGroup.has(p.groupId)){
         byGroup.set(p.groupId, {
-          name:p.group.name, total:state.postTotals[p.groupId] || 0, items:[]
+          name:p.group.name, total:state.postTotals[p.groupId] || 0, items:[],
+          days:extractGroupDays(p.group || {})
         });
       }
       byGroup.get(p.groupId).items.push(p);
@@ -1042,6 +1115,64 @@
                (b[1].total - a[1].total) ||
                (latest(b[1].items) - latest(a[1].items));
       });
+
+    var daysUsed = {};
+    var unknownDayCount = 0;
+    entries.forEach(function(entry){
+      if(!entry[1].days || !entry[1].days.length) unknownDayCount++;
+      (entry[1].days || []).forEach(function(id){ daysUsed[id] = true; });
+    });
+    var dayFilter = document.createElement('div');
+    dayFilter.className = 'day-filter';
+    var dayLabel = document.createElement('label');
+    dayLabel.textContent = 'Hari kelas';
+    dayLabel.setAttribute('for','classDayFilter');
+    var daySelect = document.createElement('select');
+    daySelect.id = 'classDayFilter';
+    var dayOptions = [{id:'all',label:'Semua Hari'}];
+    WEEKDAYS.forEach(function(day){
+      if(daysUsed[day.id]) dayOptions.push(day);
+    });
+    if(unknownDayCount) dayOptions.push({id:'unknown',label:'Hari belum tersedia'});
+    dayOptions.forEach(function(option){
+      var opt = document.createElement('option');
+      opt.value = option.id;
+      opt.textContent = option.label;
+      daySelect.appendChild(opt);
+    });
+    daySelect.value = state.selectedDay;
+    if(!dayOptions.some(function(option){ return option.id === state.selectedDay; })){
+      state.selectedDay = 'all';
+      daySelect.value = 'all';
+    }
+    daySelect.addEventListener('change',function(){
+      state.selectedDay = daySelect.value;
+      state.groupSel = null;
+      state.railScroll = 0;
+      renderPosts();
+    });
+    dayFilter.appendChild(dayLabel);
+    dayFilter.appendChild(daySelect);
+    var dayCount = document.createElement('span');
+    dayCount.className = 'day-count';
+    dayCount.textContent = entries.length + ' kelas';
+    dayFilter.appendChild(dayCount);
+    box.appendChild(dayFilter);
+
+    if(state.selectedDay !== 'all'){
+      entries = entries.filter(function(entry){
+        return state.selectedDay === 'unknown'
+          ? !entry[1].days || !entry[1].days.length
+          : (entry[1].days || []).indexOf(state.selectedDay) >= 0;
+      });
+    }
+    if(!entries.length){
+      var noDay = document.createElement('div');
+      noDay.className = 'empty';
+      noDay.textContent = 'Tidak ada kelas pada hari yang dipilih.';
+      box.appendChild(noDay);
+      return;
+    }
 
     if(isMobile()){ paintMobile(box, entries); return; }
 
