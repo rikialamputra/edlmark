@@ -301,7 +301,8 @@
   var token = localStorage.getItem(KEY) || '';
   var state = { posts:[], groups:[], quizzes:[], user:null, groupSel:null, postTotals:{},
                 likeTab:'unliked', railScroll:0, openPost:null, markScope:'',
-                selectedDay:'all', marks:{ commented:{}, downloaded:{} } };
+                selectedDay:['sun','mon','tue','wed','thu','fri','sat'][new Date().getDay()],
+                marks:{ commented:{}, downloaded:{} } };
 
   // Status like berasal dari API EdLink (field `like` pada postingan).
   function isLiked(p){ return !!(p && p.like); }
@@ -1129,10 +1130,7 @@
     dayLabel.setAttribute('for','classDayFilter');
     var daySelect = document.createElement('select');
     daySelect.id = 'classDayFilter';
-    var dayOptions = [{id:'all',label:'Semua Hari'}];
-    WEEKDAYS.forEach(function(day){
-      if(daysUsed[day.id]) dayOptions.push(day);
-    });
+    var dayOptions = [{id:'all',label:'Semua Hari'}].concat(WEEKDAYS);
     if(unknownDayCount) dayOptions.push({id:'unknown',label:'Hari belum tersedia'});
     dayOptions.forEach(function(option){
       var opt = document.createElement('option');
@@ -1141,10 +1139,6 @@
       daySelect.appendChild(opt);
     });
     daySelect.value = state.selectedDay;
-    if(!dayOptions.some(function(option){ return option.id === state.selectedDay; })){
-      state.selectedDay = 'all';
-      daySelect.value = 'all';
-    }
     daySelect.addEventListener('change',function(){
       state.selectedDay = daySelect.value;
       state.groupSel = null;
