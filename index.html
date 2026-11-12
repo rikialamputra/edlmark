@@ -1166,6 +1166,7 @@
           : (entry[1].days || []).indexOf(state.selectedDay) >= 0;
       });
     }
+    dayCount.textContent = entries.length + ' kelas';
     if(!entries.length){
       var noDay = document.createElement('div');
       noDay.className = 'empty';
