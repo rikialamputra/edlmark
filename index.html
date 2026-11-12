@@ -106,6 +106,11 @@
       padding:6px 11px;font-size:12.5px;white-space:nowrap}
   .dl:hover{background:var(--ink);color:#fff}
   .dl:disabled{opacity:.5}
+  .file-mark{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:7px;
+             padding:6px 9px;font-size:11.5px;white-space:nowrap}
+  .file-mark.done,.mark-toggle.done{border-color:#b8dfc2;background:#eff8f1;color:#186b33}
+  .mark-toggle{border:1px solid var(--line);background:var(--soft);color:var(--muted);
+               border-radius:7px;padding:5px 9px;font-size:11.5px;font-weight:600}
   .pfoot{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin-top:13px;
          padding-top:11px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
   .pfoot .open{margin-left:auto;text-decoration:none;font-size:12.5px;color:var(--ink);
@@ -176,6 +181,10 @@
                        overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;
                        -webkit-box-orient:vertical;overflow:hidden}
     .post-mini .mdate{font-size:11.5px;color:var(--muted)}
+    .post-mini .mstatus-line{display:flex;flex-wrap:wrap;gap:5px}
+    .post-mini .mstatus{font-size:10.5px;color:var(--muted);border:1px solid var(--line);
+                        border-radius:6px;padding:2px 6px;background:var(--soft)}
+    .post-mini .mstatus.done{color:#186b33;border-color:#b8dfc2;background:#eff8f1}
     .post-mini:active{border-color:var(--ink)}
     /* kuis dibedakan dengan warna hijau */
     .post-mini.quiz{background:#f1faf3;border-color:#c2e5cb}
@@ -286,10 +295,70 @@
 
   var token = localStorage.getItem(KEY) || '';
   var state = { posts:[], groups:[], quizzes:[], user:null, groupSel:null, postTotals:{},
-                likeTab:'unliked', railScroll:0 };
+                likeTab:'unliked', railScroll:0, openPost:null, markScope:'',
+                marks:{ commented:{}, downloaded:{} } };
 
   // Status like berasal dari API EdLink (field `like` pada postingan).
   function isLiked(p){ return !!(p && p.like); }
+
+  // Penanda komentar dan unduhan disimpan lokal per akun EdLink.
+  function markScopeFor(user){
+    var u = user || {};
+    return 'edlink_marks:' + String(u.id || u.userId || u.user_id ||
+      u.email || localStorage.getItem('edlink_last') || 'default');
+  }
+  function loadMarks(user){
+    var scope = markScopeFor(user);
+    if(state.markScope === scope) return;
+    state.markScope = scope;
+    try{
+      state.marks = JSON.parse(localStorage.getItem(scope)) || { commented:{}, downloaded:{} };
+    }catch(e){ state.marks = { commented:{}, downloaded:{} }; }
+    state.marks.commented = state.marks.commented || {};
+    state.marks.downloaded = state.marks.downloaded || {};
+  }
+  function saveMarks(){
+    try{ localStorage.setItem(state.markScope, JSON.stringify(state.marks)); }catch(e){}
+  }
+  function postMarkId(p){
+    return String(p.groupId || (p.group && p.group.id) || 'group') + ':' +
+      String(p.id || (p.createdAt + ':' + (p.title || 'post')));
+  }
+  function mediaList(p){
+    return (p.medias || []).filter(function(m){ return mediaUrl(m); });
+  }
+  function mediaMarkId(p,m,index){
+    var f = m.file || {};
+    return postMarkId(p) + ':' + String(m.id || m.mediaId || f.id || mediaUrl(m) ||
+      ((m.name || 'file') + ':' + index));
+  }
+  function isCommented(p){ return !!state.marks.commented[postMarkId(p)]; }
+  function isDownloaded(p,m,index){ return !!state.marks.downloaded[mediaMarkId(p,m,index)]; }
+  function downloadedCount(p){
+    var files = mediaList(p);
+    return files.filter(function(m,i){ return isDownloaded(p,m,i); }).length;
+  }
+  function refreshMarkUI(){
+    renderPosts();
+    if(!$('postModal').hidden && state.openPost){
+      $('pmBody').textContent = '';
+      $('pmBody').appendChild(postCard(state.openPost));
+    }
+  }
+  function toggleCommentMark(p){
+    var key = postMarkId(p);
+    state.marks.commented[key] = !state.marks.commented[key];
+    saveMarks();
+    refreshMarkUI();
+    toast(state.marks.commented[key] ? 'Ditandai sudah dikomentari.' : 'Tanda komentar dihapus.');
+  }
+  function toggleMediaMark(p,m,index,value){
+    var key = mediaMarkId(p,m,index);
+    state.marks.downloaded[key] = (typeof value === 'boolean') ? value : !state.marks.downloaded[key];
+    saveMarks();
+    refreshMarkUI();
+    toast(state.marks.downloaded[key] ? 'Berkas ditandai sudah diunduh.' : 'Tanda unduhan dihapus.');
+  }
 
   var $ = function(id){ return document.getElementById(id); };
   var mqMobile = window.matchMedia('(max-width:640px)');
@@ -475,7 +544,7 @@
     return null;
   }
 
-  async function downloadFile(url, name, btn){
+  async function downloadFile(url, name, btn, onSuccess){
     var old = btn.textContent;
     btn.disabled = true; btn.textContent = 'Mengunduh…';
     try{
@@ -487,6 +556,7 @@
       a.download = name || 'berkas';
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+      if(typeof onSuccess === 'function') onSuccess();
       btn.textContent = 'Terunduh';
     }catch(e){
       window.open(url, '_blank', 'noopener');
@@ -532,7 +602,7 @@
     return m ? m[1] : '';
   }
 
-  function openViewer(m){
+  function openViewer(m,p,index){
     var url = mediaUrl(m);
     if(!url){ toast('Berkas ini tidak punya tautan.'); return; }
 
@@ -584,7 +654,9 @@
     }
 
     $('viewerOpen').href = url;
-    $('viewerDl').onclick = function(){ downloadFile(url, m.name, this); };
+    $('viewerDl').onclick = function(){
+      downloadFile(url, m.name, this, function(){ toggleMediaMark(p,m,index,true); });
+    };
     $('viewer').hidden = false;
     document.body.style.overflow = 'hidden';
   }
@@ -599,6 +671,7 @@
   // detail lengkapnya (deskripsi, berkas) muncul di sini saat judul diklik,
   // dan tombol "← Kembali" di kepala modal menutupnya lagi.
   function openPost(p){
+    state.openPost = p;
     var box = $('pmBody');
     box.textContent = '';
     $('pmTitle').textContent = (p.group && p.group.name) || 'Detail postingan';
@@ -608,6 +681,7 @@
   }
 
   function closePost(){
+    state.openPost = null;
     $('pmBody').textContent = '';
     $('postModal').hidden = true;
     document.body.style.overflow = $('viewer').hidden ? '' : 'hidden';
@@ -709,11 +783,11 @@
       el.appendChild(d);
     }
 
-    var medias = (p.medias || []).filter(function(m){ return mediaUrl(m); });
+    var medias = mediaList(p);
     if(medias.length){
       var wrap = document.createElement('div');
       wrap.className = 'files';
-      medias.forEach(function(m){
+      medias.forEach(function(m,mi){
         var url = mediaUrl(m);
         var row = document.createElement('div');
         row.className = 'file';
@@ -727,11 +801,19 @@
         acts.className = 'facts';
         var view = document.createElement('button');
         view.className = 'dl'; view.type = 'button'; view.textContent = 'Lihat';
-        view.addEventListener('click', function(){ openViewer(m); });
+        view.addEventListener('click', function(){ openViewer(m,p,mi); });
         var btn = document.createElement('button');
         btn.className = 'dl'; btn.type = 'button'; btn.textContent = 'Unduh';
-        btn.addEventListener('click', function(){ downloadFile(url, m.name, btn); });
-        acts.appendChild(view); acts.appendChild(btn);
+        btn.addEventListener('click', function(){
+          downloadFile(url, m.name, btn, function(){ toggleMediaMark(p,m,mi,true); });
+        });
+        var fileMark = document.createElement('button');
+        fileMark.type = 'button';
+        fileMark.className = 'file-mark' + (isDownloaded(p,m,mi) ? ' done' : '');
+        fileMark.textContent = isDownloaded(p,m,mi) ? 'Sudah diunduh' : 'Belum diunduh';
+        fileMark.title = 'Klik untuk mengubah status unduhan secara manual';
+        fileMark.addEventListener('click', function(){ toggleMediaMark(p,m,mi); });
+        acts.appendChild(view); acts.appendChild(btn); acts.appendChild(fileMark);
         row.appendChild(main); row.appendChild(acts);
         wrap.appendChild(row);
       });
@@ -743,6 +825,14 @@
     var comments = document.createElement('span');
     comments.textContent = (p.commentCount || 0) + ' komentar';
     foot.appendChild(comments);
+    var commentMark = document.createElement('button');
+    commentMark.type = 'button';
+    commentMark.className = 'mark-toggle' + (isCommented(p) ? ' done' : '');
+    commentMark.textContent = isCommented(p) ? 'Komentar: Sudah' : 'Komentar: Belum';
+    commentMark.title = 'Penanda manual; tidak mengirim komentar ke EdLink';
+    commentMark.setAttribute('aria-pressed', isCommented(p) ? 'true' : 'false');
+    commentMark.addEventListener('click', function(){ toggleCommentMark(p); });
+    foot.appendChild(commentMark);
     if(author){
       var au = document.createElement('span');
       au.textContent = author;
@@ -846,6 +936,22 @@
         b.appendChild(ddl);
       }
     }
+
+    var statusLine = document.createElement('span');
+    statusLine.className = 'mstatus-line';
+    var commentStatus = document.createElement('span');
+    commentStatus.className = 'mstatus' + (isCommented(p) ? ' done' : '');
+    commentStatus.textContent = isCommented(p) ? 'Komentar: Sudah' : 'Komentar: Belum';
+    statusLine.appendChild(commentStatus);
+    var files = mediaList(p);
+    if(files.length){
+      var fileStatus = document.createElement('span');
+      var nDownloaded = downloadedCount(p);
+      fileStatus.className = 'mstatus' + (nDownloaded === files.length ? ' done' : '');
+      fileStatus.textContent = 'Berkas: ' + nDownloaded + '/' + files.length + ' diunduh';
+      statusLine.appendChild(fileStatus);
+    }
+    b.appendChild(statusLine);
 
     if(state.likeTab === 'all' && isLiked(p)){
       var lk = document.createElement('span');
@@ -1019,6 +1125,7 @@
       var profile = await api('/user/profile');
       state.user = profile.data;
     }
+    loadMarks(state.user);
     renderApp(state.user);
 
     var periods = await api('/university/periods');
