@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EdlinkMark</title>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icons/icon-192.png">
+<link rel="icon" type="image/svg+xml" href="icons/edlinkmark-app.svg">
+<link rel="icon" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="theme-color" content="#080f1d">
 <meta name="mobile-web-app-capable" content="yes">
@@ -462,6 +463,28 @@
     *,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}
   }
 
+
+  /* Brand logo supplied for EdlinkMark */
+  .login-brand{display:flex;align-items:center;gap:15px;margin:0 0 23px}
+  .login-brand img{display:block;width:64px;height:72px;object-fit:contain;filter:drop-shadow(0 4px 18px rgba(35,177,255,.22))}
+  .login-brand-copy{min-width:0}
+  .login-brand-copy h1{margin:0!important}
+  .login-brand-copy p.sub{margin:4px 0 0!important}
+  .top{gap:15px}
+  .top .brand-logo{display:block;flex:0 0 auto;width:52px;height:58px;object-fit:contain;
+                   filter:drop-shadow(0 3px 16px rgba(35,177,255,.24))}
+  .top .brand-copy{flex:1;min-width:0}
+  .top .brand-copy:before{content:"CAMPUS NETWORK  /  STUDENT CONSOLE";display:block;margin-bottom:5px;
+    color:var(--accent);font:700 9px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.17em}
+  @media(max-width:640px){
+    .top{display:grid;grid-template-columns:48px minmax(0,1fr);align-items:center}
+    .top .brand-logo{width:46px;height:51px}
+    .top .brand-copy{grid-column:2}
+    .top .brand-copy:before{font-size:8px;letter-spacing:.12em}
+    .top .who{grid-column:1 / -1}
+    .login-brand img{width:58px;height:64px}
+  }
+
 </style>
 </head>
 <body>
@@ -470,8 +493,13 @@
 <section id="login" hidden>
   <div id="checking" class="checking" hidden>Memeriksa sesi…</div>
   <form class="login-card" id="loginForm" autocomplete="on">
-    <h1>EdlinkMark</h1>
-    <p class="sub">Masuk dengan akun EdLink kamu.</p>
+    <div class="login-brand">
+      <img src="assets/edlinkmark-logo.svg" alt="Logo EdlinkMark" width="64" height="72">
+      <div class="login-brand-copy">
+        <h1>EdlinkMark</h1>
+        <p class="sub">Masuk dengan akun EdLink kamu.</p>
+      </div>
+    </div>
     <div id="loginErr"></div>
     <div class="field">
       <label for="nim">NIM / Email</label>
@@ -493,7 +521,8 @@
 <main id="app" hidden>
   <div class="wrap">
     <header class="top">
-      <div>
+      <img class="brand-logo" src="assets/edlinkmark-logo.svg" alt="Logo EdlinkMark" width="52" height="58">
+      <div class="brand-copy">
         <h1>EdlinkMark</h1>
         <p class="sub" id="scope">ACADEMIC WORKSPACE / LIVE CLASS FEED</p>
       </div>
