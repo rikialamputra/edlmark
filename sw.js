@@ -1,5 +1,6 @@
-var CACHE = 'edlinkmark-v3';
+var CACHE = 'edlinkmark-v4';
 var SHELL = ['./', './index.html', './manifest.webmanifest',
+             './assets/edlinkmark-logo.svg', './icons/edlinkmark-app.svg',
              './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', function(e){
